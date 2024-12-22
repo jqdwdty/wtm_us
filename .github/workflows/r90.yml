@@ -1,7 +1,7 @@
 name: "90 Timeframe"
 on:
   schedule:
-    - cron: '0 0,13 * * *'
+    - cron: '0 2,5,8,11,14,17,20,23 * * *'
 
 jobs:
   update-data:
@@ -12,12 +12,6 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GH_PAT }}
     steps:
-      - uses: quarto-dev/quarto-actions/setup@v2
-      - name: Add Quarto to PATH
-        run: |
-          echo "export PATH=$PATH:$HOME/.local/bin" >> $GITHUB_ENV
-      - run: |
-          quarto --version
       - name: Setup - Checkout repo
         uses: actions/checkout@v3
       - name: Apt-get update things
@@ -74,10 +68,7 @@ jobs:
             any::httr2
             any::openssl
             any::priceR
-      - run: echo "🍏 This job's status is ${{ job.status }}."
-      - name: "Install Packages"
-        run: |
-          remotes::install_github('hadley/emo')
-        shell: Rscript {0}
+      - name: "Install arrow"
+        run: Rscript 'arrow.R'
       - name: "Script - Run"
         run: Rscript 'get_audiences.R' 90 "US"

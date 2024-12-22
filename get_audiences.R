@@ -1,35 +1,27 @@
-# Get command-line arguments
-# tf <- commandArgs(trailingOnly = TRUE)
-# rate_limit <<- F
-
-# library(metatargetr)
-# 
-# get_ad_snapshots("3107592112807842", download = T, hashing = T, mediadir = "data/media")
 
 
 try({
-  
-  if (!(Sys.info()[["effective_user"]] %in% c("fabio", "favstats"))) {
-    remove.packages("arrow")
-  }
-  
-  
-  
+
   outcome <- commandArgs(trailingOnly = TRUE)
   
-  sets <- list()
   tf <- outcome[1]
   the_cntry <- outcome[2]
   # here::i_am("wtm_mx.Rproj")
   
   print(outcome)
   
-  # setwd("template")
-  # getwd()
+  if (Sys.info()[["effective_user"]] %in% c("fabio", "favstats")) {
+    ### CHANGE ME WHEN LOCAL!
+    tf <- "30"
+    the_cntry <- "AL"
+    print(paste0("TF: ", tf))
+    print(paste0("cntry: ", the_cntry))
+    
+  }
+  
+  
   source("utils.R")
-  # ?get_targeting
-  # get_targeting("41459763029", timeframe = "LAST_90_DAYS")
-  # debugonce(get_targeting)
+  
   
   library(httr)
   library(httr2)
@@ -40,37 +32,6 @@ try({
   library(openssl)
   library(jsonlite)
   
-  
-  saveRDS(runif(1), file = "proxy.rds")
-  
-  
-  Sys.setenv(LIBARROW_MINIMAL = "false")
-  Sys.setenv("NOT_CRAN" = "true")
-  
-  print("##### please install arrow #####")
-  
-  options(
-    HTTPUserAgent =
-      sprintf(
-        "R/%s R (%s)",
-        getRversion(),
-        paste(getRversion(), R.version["platform"], R.version["arch"], R.version["os"])
-      )
-  )
-  if (!(Sys.info()[["effective_user"]] %in% c("fabio", "favstats"))) {
-    install.packages("arrow", repos = "https://packagemanager.rstudio.com/all/__linux__/focal/latest")
-    arrow::install_arrow(verbose = F) # verbose output to debug install errors
-  }
-  # print(arrow::arrow_info())
-  # print("##### did you install arrow? #####")
-  
-  # pacman::p_load(arrow)
-  
-  # sets <- jsonlite::fromJSON("settings.json")
-  #
-  # title_txt <- read_lines("_site/_quarto.yml")
-  # title_txt[which(str_detect(title_txt, "title"))[1]] <-  glue::glue('  title: "{sets$dashboard}"')
-  # write_lines(title_txt, "_site/_quarto.yml")
   
   eu_countries <- c("AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", 
                     "FR", "GR", "HR", "HU", "IE", "IT", "LT", "LU", "LV", "MT", 
@@ -84,36 +45,7 @@ try({
     sample_n(n()) %>% 
     mutate(iso2c = fct_relevel(iso2c, eu_countries)) %>% 
     arrange(iso2c)
-  # filter(iso2c %in% c("MT", "NP", "AM", "FR", "XK"))
-  # slice(1:5)
-  
-  # full_cntry_list$iso2c %>% dput()
-  
-  if (Sys.info()[["effective_user"]] %in% c("fabio", "favstats")) {
-    ### CHANGE ME WHEN LOCAL!
-    tf <- "30"
-    the_cntry <- "US"
-    print(paste0("TF: ", tf))
-    print(paste0("cntry: ", sets))
-    
-  }
-  
-  
-  # for (cntryy in full_cntry_list$iso2c) {
-  #   the_cntry <-  cntryy
-  #   print(the_cntry)
-  #   
-  #   if(!exists("rate_limit")){
-  #     rate_limit <<- F
-  #   } else {
-  #     
-  #     if(length(rate_limit)==0)  rate_limit <<- F
-  #     
-  #   }
-  
-  # if(rate_limit){
-  #   break
-  # }
+
   
   print("################ CHECK LATEST REPORT ################")
   
@@ -130,7 +62,7 @@ try({
           ))
       }) %>%
       unlist() %>%
-      .[str_detect(., "last_90_days")] %>%
+      # .[str_detect(., "last_90_days")] %>%
       # .[100:120] %>%
       map_dfr( ~ {
         the_assets <-
@@ -162,6 +94,7 @@ try({
       })
     
     
+    
     latest <- out  %>%
       rename(tag = release,
              file_name = filename) %>%
@@ -174,21 +107,32 @@ try({
       ) %>%
       filter(str_detect(file_name, "rds")) %>%
       mutate(day  = str_remove(file_name, "\\.rds|\\.zip|\\.parquet") %>% lubridate::ymd()) %>%
-      arrange(desc(day)) %>%
-      group_by(country) %>%
-      slice(1) %>%
-      ungroup()
+      arrange(desc(day)) #%>%
+      # group_by(country, timeframe) %>%
+      # slice(1) %>%
+      # ungroup()
     
+
+      
+      then_this <- latest %>%
+        group_by(country, timeframe) %>%
+        slice(1) %>%
+        ungroup() %>% 
+        filter(str_detect(timeframe, "last_90_days"))
+        
+      
+      download.file(
+        paste0(
+          "https://github.com/favstats/meta_ad_reports/releases/download/",
+          the_cntry,
+          "-last_90_days/",
+          then_this$file_name
+        ),
+        destfile = "report.rds"
+      )      
+
     
-    download.file(
-      paste0(
-        "https://github.com/favstats/meta_ad_reports/releases/download/",
-        the_cntry,
-        "-last_90_days/",
-        latest$file_name
-      ),
-      destfile = "report.rds"
-    )
+
     
     last7 <- readRDS("report.rds") %>%
       mutate(sources = "report") %>%
@@ -204,14 +148,72 @@ try({
   
   togetstuff <- last7 %>% select(page_id , contains("amount")) %>% 
     set_names("page_id", "spend") %>% 
-    mutate(spend = as.numeric(spend)) %>% 
+    mutate(spend = parse_number(spend)) %>% 
     arrange(desc(spend))
   # if()
   # library(stringr)
-  jb <-
-    get_page_insights(togetstuff$page_id[1], timeframe = glue::glue("LAST_90_DAYS"), include_info = "targeting_info")
+
   
-  new_ds <- jb %>% arrange(ds) %>% slice(1) %>% pull(ds)
+  # }
+  for (i in 1:length(togetstuff$page_id)) {
+    # Get insights for the current page ID
+    jb <- get_page_insights(
+      togetstuff$page_id[i], 
+      timeframe = glue::glue("LAST_90_DAYS"), 
+      include_info = "targeting_info"
+    )
+    
+    # Check if `jb` is not NULL
+    if (!is.null(jb)) {
+      # Extract the `new_ds` value
+      new_ds <- jb %>% 
+        arrange(ds) %>% 
+        slice(1) %>% 
+        pull(ds)
+      
+      # Break the loop if `new_ds` is successfully assigned
+      if (!is.null(new_ds)) {
+        # message("New `ds` found, breaking the loop.")
+        break
+      }
+    }
+  }
+
+  to_get <- latest %>%
+    filter(day == new_ds) %>%
+    filter(str_detect(timeframe, tf))
+
+  if (nrow(to_get) != 0) {
+    download.file(
+      paste0(
+        "https://github.com/favstats/meta_ad_reports/releases/download/",
+        the_cntry,
+        "-",
+        to_get$timeframe,
+        "/",
+        to_get$file_name
+      ),
+      destfile = "report.rds"
+    )
+    
+    last7 <- readRDS("report.rds") %>%
+      mutate(sources = "report") %>%
+      mutate(party = "unknown")
+    
+    file.remove("report.rds")
+    
+    togetstuff <-
+      last7 %>% select(page_id , contains("amount")) %>%
+      set_names("page_id", "spend") %>%
+      mutate(spend = parse_number(spend)) %>%
+      arrange(desc(spend))
+    
+    report_matched = T
+  } else {
+    report_matched = F
+    
+  }
+  
   
   # new_ds <- "2000-01-01"
   
@@ -492,6 +494,8 @@ try({
         filter(page_id %in% last7$page_id) %>% 
         mutate(total_n = n())
       
+      the_rows_to_be_checked <- nrow(scrape_dat)
+      
       print(paste0("Number of remaining pages to check: ", nrow(scrape_dat)))
       
       ### save seperately
@@ -518,6 +522,10 @@ try({
           enddat$page_id <- enddat$internal_id
         }
         
+        new_elex <- enddat
+        
+        print(glue::glue("Old Number of Rows: {nrow(new_elex)}"))
+        
         election_dat  <- enddat %>%
           mutate_at(vars(contains("total_spend_formatted")), ~ parse_number(as.character(.x))) %>%
           # rename(page_id = internal_id) %>%
@@ -526,6 +534,8 @@ try({
           distinct()
         
         dir.create(paste0("historic/",  as.character(new_ds)), recursive = T)
+        
+        print(glue::glue("New Number of Rows: {nrow(election_dat)}"))
         
         
         arrow::write_parquet(election_dat, paste0(current_date, ".parquet"))
@@ -542,6 +552,8 @@ try({
       
       print(paste0("Number of pages to check: ", nrow(scrape_dat)))
       
+      the_rows_to_be_checked <- nrow(scrape_dat)
+      
       # debugonce(scraper)
       ### save seperately
       election_dat <- all_dat %>%
@@ -555,8 +567,12 @@ try({
         election_dat$page_id <- election_dat$internal_id
       }
       
+
       election_dat <- election_dat %>% 
         left_join(all_dat)
+      
+      
+      print(glue::glue("Number of Rows: {nrow(election_dat)}"))
       
       dir.create(paste0("historic/",  as.character(new_ds)), recursive = T)
       
@@ -612,22 +628,29 @@ try({
   
   print(file.exists(paste0(the_date, ".parquet")))
   
+  election_dat <- election_dat %>% filter(is.na(no_data))  
+  latest_elex <- latest_elex %>% filter(is.na(no_data))
+
+  
   if(!(identical(latest_elex, election_dat))){
     
     print("################ UPLOAD FILE ################")
+    
     
     try({
       # print(paste0(the_date, ".rds"))
       # print(the_tag)
       # debugonce(pb_upload_file_fr)
-      pb_upload_file_fr(
+      rsd <- pb_upload_file_fr(
         paste0(the_date, ".parquet"),
         repo = "favstats/meta_ad_targeting",
         tag = the_tag,
         releases = releases
       )
       # pb_upload_file_fr(paste0(the_date, ".zip"), repo = "favstats/meta_ad_reports", tag = the_tag, releases = full_repos)
-      
+      try({
+        the_status_code <- httr::status_code(rsd)
+      })
     })
     
     print(paste0("################ UPLOADED FILE ################: ", the_cntry))
@@ -667,6 +690,101 @@ try({
   
   
 })
+
+if(!exists("new_elex")){
+  new_elex <- tibble()
+} else {
+  new_elex <- new_elex %>% filter(is.na(no_data))
+}
+
+if(!exists("the_rows_to_be_checked")){
+  the_rows_to_be_checked <- tibble()
+} 
+
+if(!exists("the_status_code")){
+  the_status_code <- "no status code"
+} 
+
+
+
+
+# Telegram bot setup
+TELEGRAM_BOT_ID <- Sys.getenv("TELEGRAM_BOT_ID")
+TELEGRAM_GROUP_ID <- Sys.getenv("TELEGRAM_GROUP_ID")
+
+# Function to log final statistics with Telegram integration
+log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
+                                 the_rows_to_be_checked, election_dat, new_elex,
+                                 pushed_successfully, togetstuff, report_matched) {
+  # Check if ds was already present
+  ds_present <- ifelse(new_ds == latest_ds, "Yes", "No")
+  
+  # Calculate statistics
+  total_rows <- length(unique(election_dat$page_id))
+  new_rows <- length(unique(new_elex$page_id))
+  lag_days <- as.numeric(Sys.Date() - lubridate::ymd(new_ds))
+  
+  # Spending coverage statistics
+  page_ids_in_togetstuff <- sum(togetstuff$page_id %in% election_dat$page_id)
+  total_spend_in_togetstuff <- sum(togetstuff$spend, na.rm = TRUE)
+  election_dat <- distinct(election_dat, page_id, .keep_all = T)
+  covered_spend <- sum(election_dat$amount_spent[election_dat$page_id %in% togetstuff$page_id], na.rm = TRUE)
+  
+  spend_coverage_pct <- round((covered_spend / total_spend_in_togetstuff) * 100)
+  coverage_status <- ifelse(spend_coverage_pct == 100, "✅", "❌")
+  
+  # Check GitHub push status
+  push_status <- ifelse(pushed_successfully, "✅ Yes", "❌ No")
+  report_status <- ifelse(report_matched, "✅ Yes", "❌ No")
+  
+  # Construct details message
+  details <- glue::glue(
+    "   \t\t📌 *DS Already Present:* {ds_present}\n",
+    "   \t\t🔋 *Page IDs Checked:* {the_rows_to_be_checked}\n",
+    "   \t\t📊 *Total Page IDs:* {total_rows}\n",
+    "   \t\t➕ *New Page IDs Added:* {new_rows}\n",
+    "   \t\t🕒 *Days Lagging:* {lag_days} days\n",
+    "   \t\t🚀 *GitHub Push Successful:* {push_status}\n",
+    "   \t\t😎 *Report Matched:* {report_status}\n",
+    "   \t\t🔍 *Page IDs Present (of Report):* {page_ids_in_togetstuff}/{nrow(togetstuff)}\n",
+    "   \t\t💰 *Spending Coverage:* {covered_spend}/{total_spend_in_togetstuff} ({spend_coverage_pct}% {coverage_status})"
+  )
+  
+  # Construct the full message
+  the_message <- glue::glue(
+    "🔹 *{stage}* 🔹\n",
+    "🌍 *Country:* {cntry}\n",
+    "⏳ *Timeframe:* {tf}\n",
+    "🕒 *Time:* {Sys.time()}\n",
+    "{details}"
+  )
+  
+  # Send the message to Telegram
+  url <- paste0("https://api.telegram.org/bot", TELEGRAM_BOT_ID, "/sendMessage")
+  out <<- httr::POST(url, body = list(chat_id = TELEGRAM_GROUP_ID, text = the_message, parse_mode = "Markdown"), encode = "form")
+  if (httr::http_error(out)) {
+    print(httr::content(out))
+    print(httr::headers(out))
+  }
+}
+
+try({
+  # Example integration (call this after processing):
+  log_final_statistics(
+    stage = "Process Complete",
+    tf = tf,
+    cntry = the_cntry,
+    new_ds = new_ds,
+    latest_ds = latest_ds,
+    the_rows_to_be_checked = the_rows_to_be_checked,
+    election_dat = election_dat,
+    new_elex = new_elex,
+    pushed_successfully = the_status_code,
+    togetstuff = togetstuff,
+    report_matched = report_matched
+  )
+})
+
 
 
 print("################ VERY END ################")
