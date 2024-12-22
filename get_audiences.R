@@ -213,7 +213,7 @@ try({
   
   new_ds <- jb %>% arrange(ds) %>% slice(1) %>% pull(ds)
   
-  new_ds <- "2000-01-01"
+  # new_ds <- "2000-01-01"
   
   print("################ LATEST TARGETING DATA ################")
   
@@ -412,17 +412,15 @@ try({
   fin <<- tibble(no_data = T)
   
   scraper <- function(internal, time = tf) {
-    
     try({
-    
+      
     if((which(scrape_dat$page_id == internal$page_id) %% round(nrow(scrape_dat)/4, -1)) == 0){
       
       print(paste0(internal$page_name,": ", round(which(scrape_dat$page_id == internal$page_id)/nrow(scrape_dat)*100, 2)))
       
     }
-      
-    })
     
+    })
     
     # if(is.null(fin$error)){
     
@@ -455,7 +453,7 @@ try({
     
     # if (Sys.info()[["effective_user"]] %in% c("fabio", "favstats")) {
       ### CHANGE ME WHEN LOCAL!
-      print(nrow(fin))
+      # print(nrow(fin))
       
     # }# 
     # })
