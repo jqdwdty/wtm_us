@@ -628,7 +628,10 @@ try({
   
   print(file.exists(paste0(the_date, ".parquet")))
   
-  election_dat <- election_dat %>% filter(is.na(no_data))  
+  if("no_data" %in% names(election_dat)){
+    election_dat <- election_dat %>% filter(is.na(no_data))
+  }
+  
   latest_elex <- latest_elex %>% filter(is.na(no_data))
 
   
@@ -694,7 +697,9 @@ try({
 if(!exists("new_elex")){
   new_elex <- tibble()
 } else {
-  new_elex <- new_elex %>% filter(is.na(no_data))
+  if("no_data" %in% names(new_elex)){
+    new_elex <- new_elex %>% filter(is.na(no_data))
+  }
 }
 
 if(!exists("the_rows_to_be_checked")){
