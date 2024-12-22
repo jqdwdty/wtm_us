@@ -161,18 +161,25 @@ try({
     
     # Check if `jb` is not NULL
     if (!is.null(jb)) {
-      # Extract the `new_ds` value
-      new_ds <- jb %>% 
-        arrange(ds) %>% 
-        slice(1) %>% 
-        pull(ds)
-      
-      # Break the loop if `new_ds` is successfully assigned
-      if (!is.null(new_ds)) {
-        # message("New `ds` found, breaking the loop.")
-        break
+      # print("is not null")
+      if(nrow(jb) == 0){
+        # print("but is zero")
+        next
+      } else {
+        # Extract the `new_ds` value
+        new_ds <- jb %>% 
+          arrange(ds) %>% 
+          slice(1) %>% 
+          pull(ds)
+        
+        # Break the loop if `new_ds` is successfully assigned
+        if (!is.null(new_ds)) {
+          # message("New `ds` found, breaking the loop.")
+          break
+        }
+        
       }
-    }
+    } 
   }
 
   to_get <- latest %>%
@@ -500,18 +507,38 @@ try({
         
         new_elex <- enddat
         
-        print(glue::glue("Old Number of Rows: {nrow(new_elex)}"))
+        print(glue::glue("Old Number of Page IDs: {length(unique(new_elex$page_id))}"))
+        
+        try({
+          latest_elex <-
+            arrow::read_parquet(
+              paste0(
+                "https://github.com/favstats/meta_ad_targeting/releases/download/",
+                the_cntry,
+                "-last_",
+                tf,
+                "_days/",
+                thosearethere$ds[1],
+                ".parquet"
+              )
+            ) 
+          
+          if("no_data" %in% names(latest_elex)){
+            latest_elex <- latest_elex %>% filter(is.na(no_data))
+          }
+        })
         
         election_dat  <- enddat %>%
           mutate_at(vars(contains("total_spend_formatted")), ~ parse_number(as.character(.x))) %>%
           # rename(page_id = internal_id) %>%
           left_join(all_dat) %>%
           bind_rows(latest_elex %>% filter(!(page_id %in% enddat$page_id))) %>%
-          distinct()
+          distinct(page_id, cntry, page_name, total_num_ads, total_spend_formatted, is_exclusion, 
+                   tf, value, type, detailed_type,.keep_all = T)
         
         dir.create(paste0("historic/",  as.character(new_ds)), recursive = T)
         
-        print(glue::glue("New Number of Rows: {nrow(election_dat)}"))
+        print(glue::glue("New Number of Rows: {length(unique(election_dat$page_id))}"))
         
         
         arrow::write_parquet(election_dat, paste0(current_date, ".parquet"))
