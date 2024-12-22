@@ -81,7 +81,3 @@ jobs:
         shell: Rscript {0}
       - name: "Script - Run"
         run: Rscript 'get_audiences.R' 90 "US"
-      - name: "Commit"
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: Script Routine Ninety
