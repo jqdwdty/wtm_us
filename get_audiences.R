@@ -150,11 +150,7 @@ try({
     set_names("page_id", "spend") %>% 
     mutate(spend = parse_number(spend)) %>% 
     arrange(desc(spend))
-  # if()
-  # library(stringr)
-
   
-  # }
   for (i in 1:length(togetstuff$page_id)) {
     # Get insights for the current page ID
     jb <- get_page_insights(
@@ -213,9 +209,6 @@ try({
     report_matched = F
     
   }
-  
-  
-  # new_ds <- "2000-01-01"
   
   print("################ LATEST TARGETING DATA ################")
   
@@ -372,21 +365,13 @@ try({
     rename(party = name_short)
   
   
-  all_dat <- #read_csv("nl_advertisers.csv") %>%
-    # mutate(page_id = as.character(page_id)) %>%
-    # bind_rows(internal_page_ids) %>%
-    bind_rows(wtm_data) %>%
+  all_dat <- bind_rows(wtm_data) %>%
     bind_rows(tep_dat) %>%
     bind_rows(last7) %>%
-    # bind_rows(rep) %>%
-    # bind_rows(more_data %>% mutate(sources = "new")) %>%
-    # bind_rows(groenams) %>%
     distinct(page_id, .keep_all = T) %>%
     add_count(page_name, sort  = T) %>%
     mutate(remove_em = n >= 2 & str_ends(page_id, "0")) %>%
     filter(!remove_em) %>%
-    # filter(n >= 2) %>%
-    # filter(n >= 2 & str_ends(page_id, "0", negate = T)) %>%
     select(-n,-contains("no_data"))  %>% 
     mutate(total_n = n()) %>% 
     filter(page_id != 0) 
@@ -401,15 +386,10 @@ try({
     arrange(desc(amount_spent)) %>%
     distinct(page_id, .keep_all = T)
   
-  # all_dat %>% filter(str_detect(page_name, "GroenLinks-PvdA"))
   
   saveRDS(all_dat, "data/all_dat.rds")
   
   scrape_dat <- all_dat
-  # source("cntry.R")
-  
-  # all_dat %>% filter(page_id == "492150400807824")
-  
   
   fin <<- tibble(no_data = T)
   
@@ -469,11 +449,7 @@ try({
   
   
   print("################ RETRIEVE AUDIENCES ################")
-  # if(F){
-  #     # dir("provincies/7", full.names
-  # }
-  # da30 <- readRDS("data/election_dat30.rds")
-  # da7 <- readRDS("data/election_dat7.rds")
+  
   try({
     
     current_date <-
@@ -540,9 +516,7 @@ try({
         
         arrow::write_parquet(election_dat, paste0(current_date, ".parquet"))
         
-        # arrow::read_parquet(paste0(current_date, ".parquet")) %>% View()
         
-        # saveRDS(election_dat, file = paste0(current_date, ".rds"))
       }
       
       
@@ -582,25 +556,12 @@ try({
       
     }
   })
-  # saveRDS(election_dat, paste0("data/election_dat", tf, ".rds"))
   
-  # f
-  
-  # election_dat <- arrow::read_parquet("historic/2024-03-05/30.parquet")
-  
-  # sources("start.R")
   
   the_tag <- paste0(the_cntry, "-", "last_", tf, "_days")
   the_date <- new_ds
   
-  # full_repos
   
-  # cntry_name
-  
-  # reeeleases <- get_full_release()
-  # releeasee <- get_full_release()
-  
-  # saveRDS(releeasee %>% drop_na(), file = "data/releeasee.rds")
   releases <- readRDS("data/releases.rds")
   
   cntry_name <- full_cntry_list %>%
@@ -764,9 +725,11 @@ log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
     "{details}"
   )
   
+  print(the_message)
+
   # Send the message to Telegram
-  url <- paste0("https://api.telegram.org/bot", TELEGRAM_BOT_ID, "/sendMessage")
-  out <<- httr::POST(url, body = list(chat_id = TELEGRAM_GROUP_ID, text = the_message, parse_mode = "Markdown"), encode = "form")
+  url <- paste0("https://api.telegram.org/bot", Sys.getenv("TELEGRAM_BOT_ID"), "/sendMessage")
+  out <<- httr::POST(url, body = list(chat_id = Sys.getenv("TELEGRAM_GROUP_ID"), text = the_message, parse_mode = "Markdown"), encode = "form")
   if (httr::http_error(out)) {
     print(httr::content(out))
     print(httr::headers(out))

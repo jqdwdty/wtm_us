@@ -3,6 +3,7 @@ library(tidyverse)
 
 thepkgs <-  installed.packages() %>% as_tibble() %>% pull(Package)
 
+
 if(!("arrow" %in% thepkgs)){
   
   if (!(Sys.info()[["effective_user"]] %in% c("fabio", "favstats"))) {
