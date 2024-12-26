@@ -732,6 +732,8 @@ log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
   
   # Construct details message
   details <- glue::glue(
+    "   \t\t📌 *Newest DS:* {new_ds}\n",
+    "   \t\t📌 *Latest DS:* {latest_ds}\n",
     "   \t\t📌 *DS Already Present:* {ds_present}\n",
     "   \t\t🔋 *Page IDs Checked:* {the_rows_to_be_checked}\n",
     "   \t\t📊 *Total Page IDs:* {total_rows}\n",
