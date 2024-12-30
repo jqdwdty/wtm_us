@@ -6,7 +6,7 @@ try({
   outcome <- commandArgs(trailingOnly = TRUE)
   
   sets <- list()
-  sets$cntry <- outcome[1]
+  sets$cntry <- outcome[2]
   # here::i_am("wtm_mx.Rproj")
   
   print(outcome)
