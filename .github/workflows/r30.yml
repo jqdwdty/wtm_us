@@ -77,4 +77,4 @@ jobs:
       - name: "Install arrow"
         run: Rscript 'arrow.R'
       - name: "Script - Run"
-        run: Rscript 'get_audiences.R' 30 "US"
+        run: Rscript 'get_audiences.R' 30 "AL"
