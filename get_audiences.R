@@ -1,7 +1,7 @@
 
 
 try({
-
+  
   outcome <- commandArgs(trailingOnly = TRUE)
   
   tf <- outcome[1]
@@ -45,100 +45,35 @@ try({
     sample_n(n()) %>% 
     mutate(iso2c = fct_relevel(iso2c, eu_countries)) %>% 
     arrange(iso2c)
-
+  
   
   print("################ CHECK LATEST REPORT ################")
   
   
   try({
-    out <- the_cntry %>%
-      map( ~ {
-        .x %>%
-          paste0(c(
-            "-yesterday",
-            "-last_7_days",
-            "-last_30_days",
-            "-last_90_days"
-          ))
-      }) %>%
-      unlist() %>%
-      # .[str_detect(., "last_90_days")] %>%
-      # .[100:120] %>%
-      map_dfr( ~ {
-        the_assets <-
-          httr::GET(
-            paste0(
-              "https://github.com/favstats/meta_ad_reports/releases/expanded_assets/",
-              .x
-            )
-          )
-        
-        the_assets %>% httr::content() %>%
-          html_elements(".Box-row") %>%
-          html_text()  %>%
-          tibble(raw = .)   %>%
-          # Split the raw column into separate lines
-          mutate(raw = strsplit(as.character(raw), "\n")) %>%
-          # Extract the relevant lines for filename, file size, and timestamp
-          transmute(
-            filename = sapply(raw, function(x)
-              trimws(x[3])),
-            file_size = sapply(raw, function(x)
-              trimws(x[6])),
-            timestamp = sapply(raw, function(x)
-              trimws(x[7]))
-          ) %>%
-          filter(filename != "Source code") %>%
-          mutate(release = .x) %>%
-          mutate_all(as.character)
-      })
+    
+    timeframes <- c("yesterday", "7", "30", "90")
+    # Create all combinations of country codes and timeframes
+    combinations <- expand.grid(country_code = the_cntry, timeframe = timeframes, stringsAsFactors = FALSE)
+    
+    # Apply the function to each combination
+    ress <- pmap(combinations, ~ retrieve_reports_data(..1, ..2))
+    
+    # Combine results into a single data frame
+    latest <- bind_rows(ress)      
     
     
+    then_this <- latest %>%
+      group_by(country, timeframe) %>%
+      slice(1) %>%
+      ungroup() %>% 
+      filter(str_detect(timeframe, "last_90_days"))
     
-    latest <- out  %>%
-      rename(tag = release,
-             file_name = filename) %>%
-      arrange(desc(tag)) %>%
-      separate(
-        tag,
-        into = c("country", "timeframe"),
-        remove = F,
-        sep = "-"
-      ) %>%
-      filter(str_detect(file_name, "rds")) %>%
-      mutate(day  = str_remove(file_name, "\\.rds|\\.zip|\\.parquet") %>% lubridate::ymd()) %>%
-      arrange(desc(day)) #%>%
-      # group_by(country, timeframe) %>%
-      # slice(1) %>%
-      # ungroup()
     
-
-      
-      then_this <- latest %>%
-        group_by(country, timeframe) %>%
-        slice(1) %>%
-        ungroup() %>% 
-        filter(str_detect(timeframe, "last_90_days"))
-        
-      
-      download.file(
-        paste0(
-          "https://github.com/favstats/meta_ad_reports/releases/download/",
-          the_cntry,
-          "-last_90_days/",
-          then_this$file_name
-        ),
-        destfile = "report.rds"
-      )      
-
-    
-
-    
-    last7 <- readRDS("report.rds") %>%
+    last7 <- get_report_db(the_cntry, timeframe = 90, then_this$day) %>%
       mutate(sources = "report") %>%
       mutate(party = "unknown")
     
-    file.remove("report.rds")
   })
   
   if (!exists("last7")) {
@@ -146,7 +81,8 @@ try({
   }
   
   
-  togetstuff <- last7 %>% select(page_id , contains("amount")) %>% 
+  togetstuff <- last7 %>% 
+    select(contains("page_id") , contains("amount")) %>% 
     set_names("page_id", "spend") %>% 
     mutate(spend = parse_number(spend)) %>% 
     arrange(desc(spend))
@@ -181,29 +117,14 @@ try({
       }
     } 
   }
-
+  
   to_get <- latest %>%
     filter(day == new_ds) %>%
     filter(str_detect(timeframe, tf))
-
+  
   if (nrow(to_get) != 0) {
-    download.file(
-      paste0(
-        "https://github.com/favstats/meta_ad_reports/releases/download/",
-        the_cntry,
-        "-",
-        to_get$timeframe,
-        "/",
-        to_get$file_name
-      ),
-      destfile = "report.rds"
-    )
     
-    last7 <- readRDS("report.rds") %>%
-      mutate(sources = "report") %>%
-      mutate(party = "unknown")
-    
-    file.remove("report.rds")
+    last7 <- retrieve_reports_data(the_cntry, to_get$timeframe, to_get$day)
     
     togetstuff <-
       last7 %>% select(page_id , contains("amount")) %>%
@@ -220,79 +141,14 @@ try({
   print("################ LATEST TARGETING DATA ################")
   
   try({
-    # latest_elex <- readRDS(paste0("data/election_dat", tf, ".rds"))
     
-    out <- the_cntry %>%
-      map( ~ {
-        .x %>%
-          paste0(c("-last_7_days", "-last_30_days",
-                   "-last_90_days"))
-      }) %>%
-      unlist() %>%
-      keep( ~ str_detect(.x, tf)) %>%
-      # .[100:120] %>%
-      map_dfr( ~ {
-        the_assets <-
-          httr::GET(
-            paste0(
-              "https://github.com/favstats/meta_ad_targeting/releases/expanded_assets/",
-              .x
-            )
-          )
-        
-        the_assets %>% httr::content() %>%
-          html_elements(".Box-row") %>%
-          html_text()  %>%
-          tibble(raw = .)   %>%
-          # Split the raw column into separate lines
-          mutate(raw = strsplit(as.character(raw), "\n")) %>%
-          # Extract the relevant lines for filename, file size, and timestamp
-          transmute(
-            filename = sapply(raw, function(x)
-              trimws(x[3])),
-            file_size = sapply(raw, function(x)
-              trimws(x[6])),
-            timestamp = sapply(raw, function(x)
-              trimws(x[7]))
-          ) %>%
-          filter(filename != "Source code") %>%
-          mutate(release = .x) %>%
-          mutate_all(as.character)
-      })
-    
-    thosearethere <- out %>%
-      rename(tag = release,
-             file_name = filename) %>%
-      arrange(desc(tag)) %>%
-      separate(
-        tag,
-        into = c("cntry", "tframe"),
-        remove = F,
-        sep = "-"
-      ) %>%
-      mutate(ds  = str_remove(file_name, "\\.rds|\\.zip|\\.parquet")) %>%
-      distinct(cntry, ds, tframe) %>%
-      drop_na(ds) %>%
-      arrange(desc(ds))
-    
+    # Combine results into a single data frame
+    thosearethere <- retrieve_targeting_metadata(the_cntry, tf)
     
     try({
-      latest_elex <-
-        arrow::read_parquet(
-          paste0(
-            "https://github.com/favstats/meta_ad_targeting/releases/download/",
-            the_cntry,
-            "-last_",
-            tf,
-            "_days/",
-            thosearethere$ds[1],
-            ".parquet"
-          )
-        ) 
       
-      if("no_data" %in% names(latest_elex)){
-        latest_elex <- latest_elex %>% filter(is.na(no_data))
-      }
+      latest_elex <- get_targeting_db(the_cntry, tf, thosearethere$ds[1], verbose = T)
+      
     })
     
     if (!exists("latest_elex")) {
@@ -403,12 +259,12 @@ try({
   scraper <- function(internal, time = tf) {
     try({
       
-    if((which(scrape_dat$page_id == internal$page_id) %% round(nrow(scrape_dat)/4, -1)) == 0){
+      if((which(scrape_dat$page_id == internal$page_id) %% round(nrow(scrape_dat)/4, -1)) == 0){
+        
+        print(paste0(internal$page_name,": ", round(which(scrape_dat$page_id == internal$page_id)/nrow(scrape_dat)*100, 2)))
+        
+      }
       
-      print(paste0(internal$page_name,": ", round(which(scrape_dat$page_id == internal$page_id)/nrow(scrape_dat)*100, 2)))
-      
-    }
-    
     })
     
     # if(is.null(fin$error)){
@@ -441,9 +297,9 @@ try({
     
     
     # if (Sys.info()[["effective_user"]] %in% c("fabio", "favstats")) {
-      ### CHANGE ME WHEN LOCAL!
-      # print(nrow(fin))
-      
+    ### CHANGE ME WHEN LOCAL!
+    # print(nrow(fin))
+    
     # }# 
     # })
     return(fin)
@@ -510,22 +366,9 @@ try({
         print(glue::glue("Old Number of Page IDs: {length(unique(new_elex$page_id))}"))
         
         try({
-          latest_elex <-
-            arrow::read_parquet(
-              paste0(
-                "https://github.com/favstats/meta_ad_targeting/releases/download/",
-                the_cntry,
-                "-last_",
-                tf,
-                "_days/",
-                thosearethere$ds[1],
-                ".parquet"
-              )
-            ) 
           
-          if("no_data" %in% names(latest_elex)){
-            latest_elex <- latest_elex %>% filter(is.na(no_data))
-          }
+          latest_elex <- get_targeting_db(the_cntry, tf, thosearethere$ds[1], verbose = T)
+          
         })
         
         election_dat  <- enddat %>%
@@ -568,7 +411,7 @@ try({
         election_dat$page_id <- election_dat$internal_id
       }
       
-
+      
       election_dat <- election_dat %>% 
         left_join(all_dat)
       
@@ -621,7 +464,7 @@ try({
   }
   
   latest_elex <- latest_elex %>% filter(is.na(no_data))
-
+  
   
   if(!(identical(latest_elex, election_dat))){
     
@@ -755,7 +598,7 @@ log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
   )
   
   print(the_message)
-
+  
   # Send the message to Telegram
   url <- paste0("https://api.telegram.org/bot", Sys.getenv("TELEGRAM_BOT_ID"), "/sendMessage")
   out <<- httr::POST(url, body = list(chat_id = Sys.getenv("TELEGRAM_GROUP_ID"), text = the_message, parse_mode = "Markdown"), encode = "form")
