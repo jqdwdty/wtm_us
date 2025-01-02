@@ -606,7 +606,87 @@ log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
     print(httr::content(out))
     print(httr::headers(out))
   }
+  
+  # # Data for the tibble
+  # the_data <- tibble::tibble(
+  #   Field = c(
+  #     "stage",
+  #     "country",
+  #     "timeframe",
+  #     "time",
+  #     "newest_ds",
+  #     "latest_ds",
+  #     "ds_already_present",
+  #     "page_ids_checked",
+  #     "total_page_ids",
+  #     "new_page_ids_added",
+  #     "days_lagging",
+  #     "github_push_successful",
+  #     "report_matched",
+  #     "page_ids_present_audience",
+  #     "page_ids_present_report",
+  #     "spending_coverage"
+  #   ),
+  #   Value = c(
+  #     stage,
+  #     cntry,
+  #     tf,
+  #     as.character(Sys.time()),
+  #     new_ds,
+  #     latest_ds,
+  #     ds_present,
+  #     the_rows_to_be_checked,
+  #     total_rows,
+  #     new_rows,
+  #     lag_days,
+  #     push_status,
+  #     report_status,
+  #     page_ids_in_togetstuff,
+  #     nrow(togetstuff),
+  #     paste(covered_spend, "/", total_spend_in_togetstuff, "(", spend_coverage_pct, "%", coverage_status, ")")
+  #   )
+  # )
+  if(page_ids_in_togetstuff==nrow(togetstuff) | new_rows == 0){
+    update_workflow_schedule(F)
+  } else {
+    update_workflow_schedule(T)
+  }
+  
 }
+
+# Function to update GitHub Actions workflow schedule
+update_workflow_schedule <- function(should_continue = TRUE) {
+  # Read the current workflow file
+  workflow_content <- readLines(glue::glue(".github/workflows/r{tf}.yml"))
+  
+  # Find the cron schedule line
+  cron_line_idx <- which(str_detect(workflow_content, "cron:"))
+  
+  if(should_continue) {
+    # If we should continue, set normal hourly schedule
+    new_cron <- "    - cron: '0 1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,18,19,20,21,22,23 * * *'"
+  } else {
+    # If we're done for the day, set to start fresh tomorrow at 1 AM
+    new_cron <- glue::glue("    - cron: '0 {sample(1:23, 1)} * * *'")
+  }
+  
+  # Update the cron line
+  workflow_content[cron_line_idx] <- new_cron
+  
+  # Write back to file
+  writeLines(workflow_content, glue::glue(".github/workflows/r{tf}.yml"))
+  
+  # # Commit and push the changes using gh CLI
+  # system("git config --global user.email 'action@github.com'")
+  # system("git config --global user.name 'GitHub Action'")
+  # system("git add r7.yml")
+  # system("git commit -m 'Update workflow schedule based on scraping status'")
+  # system("git push")
+}
+
+# tf <- 7
+# update_workflow_schedule(F)
+
 
 try({
   # Example integration (call this after processing):
@@ -624,6 +704,7 @@ try({
     report_matched = report_matched
   )
 })
+
 
 
 
