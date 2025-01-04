@@ -2,7 +2,11 @@ name: "90 Timeframe"
 on:
   schedule:
     - cron: '0 1 * * *'
-
+  push:
+    branches:
+      - master
+      - main
+      
 jobs:
   update-data:
     runs-on: ubuntu-latest
