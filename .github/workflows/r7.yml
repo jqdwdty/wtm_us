@@ -82,8 +82,8 @@ jobs:
       - name: "Script - Run"
         run: |
           Rscript 'get_audiences.R' ${TF} "US"
-          if [ -f status.txt ]; then
-            status=$(cat status.txt)
+          if [ -f status_${TF}.txt ]; then
+            status=$(cat status_${TF}.txt)
             if [ "$status" == "changes_detected" ]; then
               # Increment the resume count as work continues
               if [ -f resume_count_${TF}.txt ]; then
@@ -98,12 +98,18 @@ jobs:
               RESUME_COUNT=0
               echo "No changes detected. Resetting resume count to $RESUME_COUNT"
             fi
-            echo $RESUME_COUNT > resume_count_${TF}.txt
           else
-            echo "Status file not found. Defaulting to no changes."
-            RESUME_COUNT=0
-            echo $RESUME_COUNT > resume_count_${TF}.txt
+            echo "Status file for timeframe ${TF} not found. Defaulting to trying again."
+            if [ -f resume_count_${TF}.txt ]; then
+              RESUME_COUNT=$(cat resume_count_${TF}.txt)
+            else
+              RESUME_COUNT=0
+            fi
+            RESUME_COUNT=$((RESUME_COUNT + 1))
+            echo "Resume count increased to $RESUME_COUNT"
           fi
+          # Save updated resume count
+          echo $RESUME_COUNT > resume_count_${TF}.txt
         env:
           RESUME_COUNT: ${{ env.RESUME_COUNT }}
 
