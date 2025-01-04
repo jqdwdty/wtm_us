@@ -58,4 +58,4 @@ jobs:
             any::httr2
             any::openssl
       - name: "Script - Meta Run"
-        run: Rscript 'get_audiences_info.R' 7 "US"
+        run: Rscript 'get_audiences_info.R' 7 "AL"

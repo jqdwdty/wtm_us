@@ -1,7 +1,11 @@
 name: "90 Timeframe"
 on:
+  push:
+    branches:
+      - master
+      - main
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 12 * * *'
 
 jobs:
   update-data:
@@ -95,7 +99,7 @@ jobs:
 
       - name: "Script - Run"
         run: |
-          result=$(Rscript 'get_audiences.R' ${TF} "AL")
+          result=$(Rscript 'get_audiences.R' ${TF} "US")
           if [[ "$result" == *"No changes"* ]]; then
             RESUME_COUNT=$((RESUME_COUNT + 1))
             echo $RESUME_COUNT > resume_count_${TF}.txt
