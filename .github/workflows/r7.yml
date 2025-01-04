@@ -1,11 +1,7 @@
 name: "7 Timeframe"
 on:
-  push:
-    branches:
-      - master
-      - main
   schedule:
-    - cron: '0 12 * * *'
+    - cron: '0 2 * * *'
 
 jobs:
   update-data:
@@ -83,27 +79,30 @@ jobs:
       - name: "Install arrow"
         run: Rscript 'arrow.R'
 
-      - name: Initialize or Reset Resume Count
-        run: |
-          # Check if workflow file has a push block
-          if grep -q "push:" .github/workflows/r${TF}.yml; then
-            if [ ! -f resume_count_${TF}.txt ]; then
-              echo 0 > resume_count_${TF}.txt
-            fi
-            echo "RESUME_COUNT=$(cat resume_count_${TF}.txt)" >> $GITHUB_ENV
-          else
-            echo 0 > resume_count_${TF}.txt
-            echo "RESUME_COUNT=0" >> $GITHUB_ENV
-            echo "Push block not found. Resetting resume count to 0."
-          fi
-
       - name: "Script - Run"
         run: |
-          result=$(Rscript 'get_audiences.R' ${TF} "US")
-          if [[ "$result" == *"No changes"* ]]; then
-            RESUME_COUNT=$((RESUME_COUNT + 1))
+          Rscript 'get_audiences.R' ${TF} "US"
+          if [ -f status.txt ]; then
+            status=$(cat status.txt)
+            if [ "$status" == "changes_detected" ]; then
+              # Increment the resume count as work continues
+              if [ -f resume_count_${TF}.txt ]; then
+                RESUME_COUNT=$(cat resume_count_${TF}.txt)
+              else
+                RESUME_COUNT=0
+              fi
+              RESUME_COUNT=$((RESUME_COUNT + 1))
+              echo "Changes detected. Resume count increased to $RESUME_COUNT"
+            else
+              # Reset resume count as no further work is needed
+              RESUME_COUNT=0
+              echo "No changes detected. Resetting resume count to $RESUME_COUNT"
+            fi
             echo $RESUME_COUNT > resume_count_${TF}.txt
-            echo "Resume count increased to $RESUME_COUNT"
+          else
+            echo "Status file not found. Defaulting to no changes."
+            RESUME_COUNT=0
+            echo $RESUME_COUNT > resume_count_${TF}.txt
           fi
         env:
           RESUME_COUNT: ${{ env.RESUME_COUNT }}

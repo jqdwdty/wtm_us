@@ -1,8 +1,4 @@
 
-# Error in retrieve_reports_data(the_cntry, to_get$timeframe, to_get$day) : 
-#   `timeframe` must be one of: 'yesterday', '7', '30', '90', or 'lifelong'.
-# Error : object 'latest_ds' not found
-
 try({
   
   outcome <- commandArgs(trailingOnly = TRUE)
@@ -15,7 +11,7 @@ try({
   if (Sys.info()[["effective_user"]] %in% c("fabio", "favstats")) {
     ### CHANGE ME WHEN LOCAL!
     tf <- "30"
-    the_cntry <- "AL"
+    the_cntry <- "HU"
     print(paste0("TF: ", tf))
     print(paste0("cntry: ", the_cntry))
     
@@ -586,6 +582,16 @@ log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
     should_continue <- update_workflow_schedule(T)
   }
   
+    
+    if (should_continue) {
+      writeLines("changes_detected", glue::glue("status_{tf}.txt"))
+      print(glue::glue("Status for timeframe {tf}: changes_detected"))
+    } else {
+      writeLines("no_changes", glue::glue("status_{tf}.txt"))
+      print(glue::glue("Status for timeframe {tf}: no_changes"))
+    }
+  
+  
   should_continue <- ifelse(should_continue, "✅ Yes", "❌ No")
   
   # Construct details message
@@ -742,7 +748,7 @@ update_workflow_schedule <- function(should_continue = TRUE, thetf = tf, verbose
   if (verbose) print("Workflow update complete.")
   workflow_content <- readLines(workflow_file)
   
-  if (verbose) print(workflow_content)
+  # if (verbose) print(workflow_content)
   
   return(should_continue)
 }
