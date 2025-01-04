@@ -1,7 +1,12 @@
 name: "90 Timeframe"
+
 on:
   schedule:
     - cron: '0 1 * * *'
+  push:
+    branches:
+      - master
+      - main
       
 jobs:
   update-data:
@@ -110,8 +115,7 @@ jobs:
           fi
           # Save updated resume count
           echo $RESUME_COUNT > resume_count_${TF}.txt
-        env:
-          RESUME_COUNT: ${{ env.RESUME_COUNT }}
+          echo "RESUME_COUNT=$RESUME_COUNT" >> $GITHUB_ENV  # Persist for subsequent steps
 
       - name: Commit changes and Force Push Changes
         run: |
