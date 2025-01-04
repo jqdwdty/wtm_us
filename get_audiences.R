@@ -1,4 +1,7 @@
 
+# Error in retrieve_reports_data(the_cntry, to_get$timeframe, to_get$day) : 
+#   `timeframe` must be one of: 'yesterday', '7', '30', '90', or 'lifelong'.
+# Error : object 'latest_ds' not found
 
 try({
   
@@ -6,8 +9,7 @@ try({
   
   tf <- outcome[1]
   the_cntry <- outcome[2]
-  # here::i_am("wtm_mx.Rproj")
-  
+
   print(outcome)
   
   if (Sys.info()[["effective_user"]] %in% c("fabio", "favstats")) {
@@ -123,8 +125,8 @@ try({
     filter(str_detect(timeframe, tf))
   
   if (nrow(to_get) != 0) {
-    
-    last7 <- retrieve_reports_data(the_cntry, to_get$timeframe, to_get$day)
+    # debugonce(retrieve_reports_data)
+    last7 <- get_report_db(the_cntry, readr::parse_number(to_get$timeframe), to_get$day)
     
     togetstuff <-
       last7 %>% select(page_id , contains("amount")) %>%
@@ -463,7 +465,11 @@ try({
     election_dat <- election_dat %>% filter(is.na(no_data))
   }
   
-  latest_elex <- latest_elex %>% filter(is.na(no_data))
+  if("no_data" %in% names(latest_elex)){
+    latest_elex <- latest_elex %>% filter(is.na(no_data))
+  }
+  
+ 
   
   
   if(!(identical(latest_elex, election_dat))){
@@ -573,6 +579,15 @@ log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
   push_status <- ifelse(pushed_successfully, "✅ Yes", "❌ No")
   report_status <- ifelse(report_matched, "✅ Yes", "❌ No")
   
+  
+  if(page_ids_in_togetstuff==nrow(togetstuff) | new_rows == 0){
+    should_continue <- update_workflow_schedule(F)
+  } else {
+    should_continue <- update_workflow_schedule(T)
+  }
+  
+  should_continue <- ifelse(should_continue, "✅ Yes", "❌ No")
+  
   # Construct details message
   details <- glue::glue(
     "   \t\t📌 *Newest DS:* {new_ds}\n",
@@ -585,7 +600,9 @@ log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
     "   \t\t🚀 *GitHub Push Successful:* {push_status}\n",
     "   \t\t😎 *Report Matched:* {report_status}\n",
     "   \t\t🔍 *Page IDs Present (of Report):* {page_ids_in_togetstuff}/{nrow(togetstuff)}\n",
-    "   \t\t💰 *Spending Coverage:* {covered_spend}/{total_spend_in_togetstuff} ({spend_coverage_pct}% {coverage_status})"
+    "   \t\t💰 *Spending Coverage:* {covered_spend}/{total_spend_in_togetstuff} ({spend_coverage_pct}% {coverage_status})\n",
+    "   \t\t📌 *Continue Today:* {should_continue}\n",
+    "   \t\t💰 *Source:* jqdwdty"
   )
   
   # Construct the full message
@@ -646,46 +663,91 @@ log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
   #     paste(covered_spend, "/", total_spend_in_togetstuff, "(", spend_coverage_pct, "%", coverage_status, ")")
   #   )
   # )
-  if(page_ids_in_togetstuff==nrow(togetstuff) | new_rows == 0){
-    update_workflow_schedule(F)
-  } else {
-    update_workflow_schedule(T)
-  }
+
   
 }
 
-# Function to update GitHub Actions workflow schedule
-update_workflow_schedule <- function(should_continue = TRUE) {
+update_workflow_schedule <- function(should_continue = TRUE, thetf = tf, verbose = TRUE) {
   # Read the current workflow file
-  workflow_content <- readLines(glue::glue(".github/workflows/r{tf}.yml"))
+  workflow_file <- glue::glue(".github/workflows/r{thetf}.yml")
+  if (verbose) print(glue::glue("Reading workflow file: {workflow_file}"))
+  workflow_content <- readLines(workflow_file)
   
-  # Find the cron schedule line
-  cron_line_idx <- which(str_detect(workflow_content, "cron:"))
+  # Define the `push` block
+  push_block <- c(
+    "  push:",
+    "    branches:",
+    "      - master",
+    "      - main"
+  )
   
-  if(should_continue) {
-    # If we should continue, set normal hourly schedule
-    new_cron <- "    - cron: '0 1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,18,19,20,21,22,23 * * *'"
+  # Locate the `push` block start and end
+  push_start_idx <- which(str_detect(workflow_content, "^  push:"))
+  branches_end_idx <- if (length(push_start_idx) > 0) {
+    push_start_idx + 3  # Assumes the block always has 3 lines
   } else {
-    # If we're done for the day, set to start fresh tomorrow at 1 AM
-    new_cron <- glue::glue("    - cron: '0 {sample(1:23, 1)} * * *'")
+    integer(0)  # No `push` block exists
+  }
+  if (verbose) {
+    if (length(push_start_idx) > 0) {
+      print("Found existing 'push' block.")
+    } else {
+      print("No 'push' block found.")
+    }
   }
   
-  # Update the cron line
-  workflow_content[cron_line_idx] <- new_cron
+  # Find the `cron` line
+  cron_line_idx <- which(str_detect(workflow_content, "cron:"))
+  if (verbose) {
+    if (length(cron_line_idx) > 0) {
+      print(glue::glue("Found existing cron line at index {cron_line_idx}."))
+    } else {
+      print("No cron line found. This may cause issues.")
+    }
+  }
   
-  # Write back to file
-  writeLines(workflow_content, glue::glue(".github/workflows/r{tf}.yml"))
+  # Handle `should_continue` logic
+  if (should_continue) {
+    if (verbose) print("Workflow should continue. Ensuring 'push' block exists.")
+    
+    # Add `push` block if it doesn't exist
+    if (length(push_start_idx) == 0) {
+      if (verbose) print("Adding 'push' block.")
+      workflow_content <- append(workflow_content, push_block, after = which(str_detect(workflow_content, "^on:")))
+    }
+  } else {
+    # Randomly assign a new hour to the existing cron schedule
+    settimer <- sample(1:12, 1)
+    new_cron <- glue::glue("    - cron: '0 {settimer} * * *'")
+    if (verbose) print(glue::glue("Workflow will pause for the day. Updating cron schedule to: {new_cron}"))
+    
+    # Update the cron line with the new random hour
+    if (length(cron_line_idx) > 0) {
+      workflow_content[cron_line_idx] <- new_cron
+    } else {
+      if (verbose) print("No existing cron line to update. This should not happen.")
+    }
+    
+    # Remove `push` block if it exists
+    if (length(push_start_idx) > 0) {
+      if (verbose) print("Removing existing 'push' block.")
+      workflow_content <- workflow_content[-(push_start_idx:branches_end_idx)]
+    }
+  }
   
-  # # Commit and push the changes using gh CLI
-  # system("git config --global user.email 'action@github.com'")
-  # system("git config --global user.name 'GitHub Action'")
-  # system("git add r7.yml")
-  # system("git commit -m 'Update workflow schedule based on scraping status'")
-  # system("git push")
+  # Write the updated content back to the workflow file
+  if (verbose) print(glue::glue("Writing updated content back to: {workflow_file}"))
+  writeLines(workflow_content, workflow_file)
+  
+  if (verbose) print("Workflow update complete.")
+  workflow_content <- readLines(workflow_file)
+  
+  if (verbose) print(workflow_content)
+  
+  return(should_continue)
 }
-
 # tf <- 7
-# update_workflow_schedule(F)
+# update_workflow_schedule(T)
 
 
 try({

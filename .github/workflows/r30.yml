@@ -1,24 +1,31 @@
-name: "7 Timeframe"
+name: "30 Timeframe"
 on:
+  push:
+    branches:
+      - master
+      - main
   schedule:
-    - cron: '0 16 * * *'
+    - cron: '0 12 * * *'
 
 jobs:
   update-data:
-    name: Update Dashboard
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     env:
+      TF: "30"  # Timeframe variable for easy global reference
       GITHUB_PAT: ${{ secrets.GH_PAT }}      
       TELEGRAM_BOT_ID: ${{ secrets.TELEGRAM_BOT_ID }}
       TELEGRAM_GROUP_ID: ${{ secrets.TELEGRAM_GROUP_ID }}
     steps:
       - name: Setup - Checkout repo
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
       - name: Apt-get update things
         run: |
           sudo apt-get update 
+
       - name: Apt-get needed things
         run: |
           sudo apt-get install --no-install-recommends -y \
@@ -29,10 +36,12 @@ jobs:
           libfribidi-dev \
           libudunits2-dev \
           libgdal-dev
+
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
         with:
           r-version: 'release'
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           cache-version: 1
@@ -70,18 +79,52 @@ jobs:
             any::httr2
             any::openssl
             any::priceR
+
       - name: "Install arrow"
         run: Rscript 'arrow.R'
+
+      - name: Initialize or Reset Resume Count
+        run: |
+          # Check if workflow file has a push block
+          if grep -q "push:" .github/workflows/r${TF}.yml; then
+            if [ ! -f resume_count_${TF}.txt ]; then
+              echo 0 > resume_count_${TF}.txt
+            fi
+            echo "RESUME_COUNT=$(cat resume_count_${TF}.txt)" >> $GITHUB_ENV
+          else
+            echo 0 > resume_count_${TF}.txt
+            echo "RESUME_COUNT=0" >> $GITHUB_ENV
+            echo "Push block not found. Resetting resume count to 0."
+          fi
+
       - name: "Script - Run"
-        run: Rscript 'get_audiences.R' 30 "AL"
-      - name: Commit changes
+        run: |
+          result=$(Rscript 'get_audiences.R' ${TF} "AL")
+          if [[ "$result" == *"No changes"* ]]; then
+            RESUME_COUNT=$((RESUME_COUNT + 1))
+            echo $RESUME_COUNT > resume_count_${TF}.txt
+            echo "Resume count increased to $RESUME_COUNT"
+          fi
+        env:
+          RESUME_COUNT: ${{ env.RESUME_COUNT }}
+
+      - name: Commit changes and Force Push Changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Determine if 'main' or 'master' exists
+          if git show-ref --verify --quiet refs/heads/main; then
+            TARGET_BRANCH="main"
+          elif git show-ref --verify --quiet refs/heads/master; then
+            TARGET_BRANCH="master"
+          else
+            echo "Neither 'main' nor 'master' branch exists. Exiting."
+            exit 1
+          fi
+        
+          # Stage and commit all changes, including resume count
           git add -A
-          git commit -m "Update data - $(date +"%Y-%m-%d %H:%M:%S")" || echo "No changes to commit"
-      - name: Force push changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          git push --force origin master
+          git commit -m "#${RESUME_COUNT} Resume ${TF} TF: $(date +"%Y-%m-%d %H:%M:%S")" || echo "No changes to commit"
+        
+          # Force push changes to the determined branch
+          git push --force origin $TARGET_BRANCH
