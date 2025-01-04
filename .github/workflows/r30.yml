@@ -121,6 +121,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
           # Determine if 'main' or 'master' exists
           if git show-ref --verify --quiet refs/heads/main; then
             TARGET_BRANCH="main"
@@ -130,15 +131,21 @@ jobs:
             echo "Neither 'main' nor 'master' branch exists. Exiting."
             exit 1
           fi
-
+      
           # Load the persisted RESUME_COUNT from the environment
           echo "Using Resume Count: $RESUME_COUNT"
-
+      
+          # Check if RESUME_COUNT is not empty
+          if [ -z "$RESUME_COUNT" ]; then
+            echo "RESUME_COUNT is empty. Skipping commit and push."
+            exit 0
+          fi
+      
           # Stage and commit all changes, including resume count
           git add -A
           git commit -m "#$RESUME_COUNT Resume ${TF} TF: $(date +"%Y-%m-%d %H:%M:%S")" || echo "No changes to commit"
-
-          # Force push changes to the determined branch
+      
+          # Push changes to the determined branch
           git push --force origin $TARGET_BRANCH
         env:
           RESUME_COUNT: ${{ env.RESUME_COUNT }}
