@@ -32,6 +32,7 @@ jobs:
           else
             echo "GitHub CLI is already installed."
             gh --version
+          fi
 
       - name: Authenticate GitHub CLI
         run: echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
@@ -148,9 +149,9 @@ jobs:
           # Load the persisted RESUME_COUNT from the environment
           echo "Using Resume Count: $RESUME_COUNT"
       
-          # Check if RESUME_COUNT is not empty
-          if [ -z "$RESUME_COUNT" ]; then
-            echo "RESUME_COUNT is empty. Skipping commit and push."
+          # Check if RESUME_COUNT is empty or zero
+          if [ -z "$RESUME_COUNT" ] || [ "${RESUME_COUNT:-0}" -eq 0 ]; then
+            echo "RESUME_COUNT is empty or zero. Skipping commit and push."
             exit 0
           fi
 
