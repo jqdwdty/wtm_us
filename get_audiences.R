@@ -674,85 +674,72 @@ log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
 }
 
 update_workflow_schedule <- function(should_continue = TRUE, thetf = tf, verbose = TRUE) {
-  # Read the current workflow file
-  workflow_file <- glue::glue(".github/workflows/r{thetf}.yml")
-  if (verbose) print(glue::glue("Reading workflow file: {workflow_file}"))
-  workflow_content <- readLines(workflow_file)
+  all_timeframes <- c(7, 30, 90)  # Define all timeframes
+  other_timeframes <- setdiff(all_timeframes, as.numeric(thetf))  # Timeframes to modify
   
-  # Define the `push` block
-  push_block <- c(
-    "  push:",
-    "    branches:",
-    "      - master",
-    "      - main"
-  )
-  
-  # Locate the `push` block start and end
-  push_start_idx <- which(str_detect(workflow_content, "^  push:"))
-  branches_end_idx <- if (length(push_start_idx) > 0) {
-    push_start_idx + 3  # Assumes the block always has 3 lines
-  } else {
-    integer(0)  # No `push` block exists
-  }
-  if (verbose) {
-    if (length(push_start_idx) > 0) {
-      print("Found existing 'push' block.")
-    } else {
-      print("No 'push' block found.")
-    }
-  }
-  
-  # Find the `cron` line
-  cron_line_idx <- which(str_detect(workflow_content, "cron:"))
-  if (verbose) {
-    if (length(cron_line_idx) > 0) {
-      print(glue::glue("Found existing cron line at index {cron_line_idx}."))
-    } else {
-      print("No cron line found. This may cause issues.")
-    }
-  }
-  
-  # Handle `should_continue` logic
   if (should_continue) {
-    if (verbose) print("Workflow should continue. Ensuring 'push' block exists.")
-    
-    # Add `push` block if it doesn't exist
-    if (length(push_start_idx) == 0) {
-      if (verbose) print("Adding 'push' block.")
-      workflow_content <- append(workflow_content, push_block, after = which(str_detect(workflow_content, "^on:")))
+    # Loop through all other timeframes and remove `push` block
+    for (tf in other_timeframes) {
+      workflow_file <- glue::glue(".github/workflows/r{tf}.yml")
+      if (verbose) print(glue::glue("Processing workflow file: {workflow_file}"))
+      
+      if (!file.exists(workflow_file)) {
+        if (verbose) print(glue::glue("Workflow file does not exist: {workflow_file}. Skipping."))
+        next
+      }
+      
+      workflow_content <- readLines(workflow_file)
+      
+      # Locate the `push` block start and end
+      push_start_idx <- which(str_detect(workflow_content, "^  push:"))
+      branches_end_idx <- if (length(push_start_idx) > 0) {
+        push_start_idx + 3  # Assumes the block always has 3 lines
+      } else {
+        integer(0)  # No `push` block exists
+      }
+      
+      if (length(push_start_idx) > 0) {
+        if (verbose) print(glue::glue("Removing 'push' block from {workflow_file}."))
+        workflow_content <- workflow_content[-(push_start_idx:branches_end_idx)]
+        writeLines(workflow_content, workflow_file)
+        if (verbose) print(glue::glue("'push' block removed successfully from {workflow_file}."))
+      } else {
+        if (verbose) print(glue::glue("No 'push' block found in {workflow_file}. Skipping."))
+      }
     }
   } else {
-    # Randomly assign a new hour to the existing cron schedule
+    # For the current timeframe, update the cron schedule
+    workflow_file <- glue::glue(".github/workflows/r{thetf}.yml")
+    if (verbose) print(glue::glue("Processing current workflow file: {workflow_file}"))
+    
+    if (!file.exists(workflow_file)) {
+      if (verbose) print(glue::glue("Workflow file does not exist: {workflow_file}. Exiting."))
+      return(FALSE)
+    }
+    
+    workflow_content <- readLines(workflow_file)
+    
+    # Find the `cron` line
+    cron_line_idx <- which(str_detect(workflow_content, "cron:"))
     settimer <- sample(1:12, 1)
     new_cron <- glue::glue("    - cron: '0 {settimer} * * *'")
-    if (verbose) print(glue::glue("Workflow will pause for the day. Updating cron schedule to: {new_cron}"))
     
-    # Update the cron line with the new random hour
     if (length(cron_line_idx) > 0) {
       workflow_content[cron_line_idx] <- new_cron
+      if (verbose) print(glue::glue("Updated cron schedule in {workflow_file} to: {new_cron}"))
     } else {
-      if (verbose) print("No existing cron line to update. This should not happen.")
+      if (verbose) print("No cron line found. This may cause issues.")
     }
     
-    # Remove `push` block if it exists
-    if (length(push_start_idx) > 0) {
-      if (verbose) print("Removing existing 'push' block.")
-      workflow_content <- workflow_content[-(push_start_idx:branches_end_idx)]
-    }
+    writeLines(workflow_content, workflow_file)
+    if (verbose) print(glue::glue("Workflow file updated: {workflow_file}"))
   }
   
-  # Write the updated content back to the workflow file
-  if (verbose) print(glue::glue("Writing updated content back to: {workflow_file}"))
-  writeLines(workflow_content, workflow_file)
-  
-  if (verbose) print("Workflow update complete.")
-  workflow_content <- readLines(workflow_file)
-  
-  # if (verbose) print(workflow_content)
-  
-  return(should_continue)
+  if (verbose) print("Workflow update process complete.")
+  return(TRUE)
 }
-# tf <- 7
+
+# tf <- 30
 # update_workflow_schedule(T)
 
 
