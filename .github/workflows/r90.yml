@@ -2,8 +2,12 @@ name: "90 Timeframe"
 
 on:
   schedule:
-    - cron: '0 1 * * *'
-      
+    - cron: '0 2 * * *'
+  push:
+    branches:
+      - master
+      - main
+
 jobs:
   update-data:
     runs-on: ubuntu-latest
@@ -18,6 +22,19 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
+
+      - name: Check and Install GitHub CLI
+        run: |
+          if ! command -v gh &> /dev/null; then
+            echo "GitHub CLI is not installed. Installing..."
+            sudo apt-get update
+            sudo apt-get install -y gh
+          else
+            echo "GitHub CLI is already installed."
+            gh --version
+
+      - name: Authenticate GitHub CLI
+        run: echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
 
       - name: Apt-get update things
         run: |
@@ -113,7 +130,7 @@ jobs:
           echo $RESUME_COUNT > resume_count_${TF}.txt
           echo "RESUME_COUNT=$RESUME_COUNT" >> $GITHUB_ENV  # Persist for subsequent steps
 
-      - name: Commit changes and Force Push Changes
+      - name: Commit changes and Push if No Conflicts
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -124,10 +141,10 @@ jobs:
           elif git show-ref --verify --quiet refs/heads/master; then
             TARGET_BRANCH="master"
           else
-            echo "Neither 'main' nor 'master' branch exists. Exiting."
-            exit 1
+            echo "Neither 'main' nor 'master' branch exists. Skipping commit and push."
+            exit 0
           fi
-      
+
           # Load the persisted RESUME_COUNT from the environment
           echo "Using Resume Count: $RESUME_COUNT"
       
@@ -136,7 +153,14 @@ jobs:
             echo "RESUME_COUNT is empty. Skipping commit and push."
             exit 0
           fi
-      
+
+          # Check if a workflow with this specific TF is already running or queued
+          RUNNING_JOBS=$(gh run list --json name,status --jq '.[] | select(.name | test(".*Resume ${TF} TF.*")) | select(.status == "in_progress" or .status == "queued")')
+          if [ ! -z "$RUNNING_JOBS" ]; then
+            echo "A job with timeframe ${TF} is already running or queued. Skipping commit and push."
+            exit 0
+          fi
+
           # Stage and commit all changes, including resume count
           git add -A
           git commit -m "#$RESUME_COUNT Resume ${TF} TF: $(date +"%Y-%m-%d %H:%M:%S")" || echo "No changes to commit"
