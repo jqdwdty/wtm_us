@@ -3,10 +3,6 @@ name: "7 Timeframe"
 on:
   schedule:
     - cron: '0 1 * * *'
-  push:
-    branches:
-      - master
-      - main
 
 jobs:
   update-data:
@@ -160,6 +156,8 @@ jobs:
           if [ ! -z "$RUNNING_JOBS" ]; then
             echo "A job with timeframe ${TF} is already running or queued. Skipping commit and push."
             exit 0
+          else
+            echo "No running or queued jobs found for timeframe ${TF}. Proceeding with commit and push."
           fi
 
           # Stage and commit all changes, including resume count
