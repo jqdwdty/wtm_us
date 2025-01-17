@@ -3,10 +3,6 @@ name: "30 Timeframe"
 on:
   schedule:
     - cron: '0 3 * * *'
-  push:
-    branches:
-      - master
-      - main
 
 jobs:
   update-data:
