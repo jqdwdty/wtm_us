@@ -624,7 +624,13 @@ log_final_statistics <- function(stage, tf, cntry, new_ds, latest_ds,
     writeLines("no_changes", glue::glue("status_{tf}.txt"))
     print(glue::glue("Status for timeframe {tf}: no_changes"))
   }
-  
+
+  what_it_gets <- nrow(togetstuff)
+  bad_hombres <- page_ids_in_togetstuff / what_it_gets
+
+  if(bad_hombres <= 0.65){
+    should_continue <- TRUE
+  }
   
   should_continue <- ifelse(should_continue, "✅ Yes", "❌ No")
   
