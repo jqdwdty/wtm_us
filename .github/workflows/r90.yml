@@ -166,15 +166,14 @@ jobs:
 
           # Check if a workflow with this specific TF is already running or queued
           echo "Checking for running or queued jobs for timeframe ${TF}..."
-          RUNNING_JOBS=$(jq -r --arg TF "${TF}" '.[] | select(.name == ($TF + " Timeframe")) | select(.status == "in_progress" or .status == "queued")' gh_run_list.json)
+          RUNNING_COUNT=$(jq -r --arg TF "${TF}" \
+            '[.[] | select(.name == ($TF + " Timeframe") and (.status == "in_progress" or .status == "queued"))] | length' \
+            gh_run_list.json)
           
           # Log filtered jobs for verbosity
-          if [ -z "$RUNNING_JOBS" ]; then
-            echo "No running or queued jobs found for timeframe ${TF}."
-          else
-            echo "Detected running or queued jobs for timeframe ${TF}:"
-            echo "$RUNNING_JOBS"
-            echo "Skipping commit and push."
+          echo "Detected $RUNNING_COUNT running or queued jobs for timeframe ${TF}."
+          if [ "$RUNNING_COUNT" -ge 2 ]; then
+            echo "Two or more jobs are already running or queued. Skipping commit and push."
             exit 0
           fi
 
