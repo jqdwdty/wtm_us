@@ -129,10 +129,12 @@ jobs:
 
       - name: Commit changes and Push if No Conflicts
         run: |
+          # Configure Git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Determine if 'main' or 'master' exists
+          # Determine the branch to push to
+          echo "Determining target branch..."
           if git show-ref --verify --quiet refs/heads/main; then
             TARGET_BRANCH="main"
           elif git show-ref --verify --quiet refs/heads/master; then
@@ -141,30 +143,44 @@ jobs:
             echo "Neither 'main' nor 'master' branch exists. Skipping commit and push."
             exit 0
           fi
+          echo "Target branch: $TARGET_BRANCH"
 
           # Load the persisted RESUME_COUNT from the environment
           echo "Using Resume Count: $RESUME_COUNT"
-      
+
           # Check if RESUME_COUNT is empty or zero
           if [ -z "$RESUME_COUNT" ] || [ "${RESUME_COUNT:-0}" -eq 0 ]; then
             echo "RESUME_COUNT is empty or zero. Skipping commit and push."
             exit 0
           fi
 
+          # Fetch the list of workflow runs for debugging
+          echo "Fetching the list of GitHub Actions workflow runs..."
+          gh run list --json name,status --limit 100 > gh_run_list.json
+          echo "Full output of gh run list:"
+          cat gh_run_list.json
+
           # Check if a workflow with this specific TF is already running or queued
-          RUNNING_JOBS=$(gh run list --json name,status --jq '.[] | select(.name | test(".*Resume ${TF} TF.*")) | select(.status == "in_progress" or .status == "queued")')
-          if [ ! -z "$RUNNING_JOBS" ]; then
-            echo "A job with timeframe ${TF} is already running or queued. Skipping commit and push."
-            exit 0
+          echo "Checking for running or queued jobs for timeframe ${TF}..."
+          RUNNING_JOBS=$(jq -r --arg TF "${TF}" '.[] | select(.name == ($TF + " Timeframe")) | select(.status == "in_progress" or .status == "queued")' gh_run_list.json)
+          
+          # Log filtered jobs for verbosity
+          if [ -z "$RUNNING_JOBS" ]; then
+            echo "No running or queued jobs found for timeframe ${TF}."
           else
-            echo "No running or queued jobs found for timeframe ${TF}. Proceeding with commit and push."
+            echo "Detected running or queued jobs for timeframe ${TF}:"
+            echo "$RUNNING_JOBS"
+            echo "Skipping commit and push."
+            exit 0
           fi
 
           # Stage and commit all changes, including resume count
+          echo "Staging and committing changes..."
           git add -A
           git commit -m "#$RESUME_COUNT Resume ${TF} TF: $(date +"%Y-%m-%d %H:%M:%S")" || echo "No changes to commit"
-      
+
           # Push changes to the determined branch
+          echo "Pushing changes to branch $TARGET_BRANCH..."
           git push --force origin $TARGET_BRANCH
         env:
           RESUME_COUNT: ${{ env.RESUME_COUNT }}

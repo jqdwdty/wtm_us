@@ -2,11 +2,7 @@ name: "90 Timeframe"
 
 on:
   schedule:
-    - cron: '0 2 * * *'
-  push:
-    branches:
-      - master
-      - main
+    - cron: '0 1 * * *'
 
 jobs:
   update-data:
@@ -100,7 +96,7 @@ jobs:
 
       - name: "Script - Run"
         run: |
-          Rscript 'get_audiences.R' ${TF} "DE"
+          Rscript 'get_audiences.R' ${TF} "US"
           if [ -f status_${TF}.txt ]; then
             status=$(cat status_${TF}.txt)
             if [ "$status" == "changes_detected" ]; then
